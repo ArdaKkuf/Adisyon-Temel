@@ -13,6 +13,7 @@ import TableList from './pages/Garson/TableList';
 import TableDetail from './pages/Garson/TableDetail';
 import Orders from './pages/Garson/Orders';
 import MenuView from './pages/Garson/MenuView';
+import QRMenu from './pages/QRMenu';
 
 const ProtectedRoute = () => {
   const { user } = useApp();
@@ -27,16 +28,17 @@ const ProtectedRoute = () => {
 function AppContent() {
   return (
     <Routes>
+      <Route path="/qr-menu" element={<QRMenu />} />
       <Route path="/login" element={<Login />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="admin" element={<Layout><Outlet /></Layout>}>
+        <Route path="/admin" element={<Layout><Outlet /></Layout>}>
           <Route index element={<Dashboard />} />
           <Route path="tables" element={<Tables />} />
           <Route path="menu" element={<Menu />} />
           <Route path="reports" element={<Reports />} />
           <Route path="manager" element={<Manager />} />
         </Route>
-        <Route path="garson" element={<Layout><Outlet /></Layout>}>
+        <Route path="/garson" element={<Layout><Outlet /></Layout>}>
           <Route index element={<TableList />} />
           <Route path="table/:id" element={<TableDetail />} />
           <Route path="orders" element={<Orders />} />
@@ -51,7 +53,7 @@ function AppContent() {
 function App() {
   return (
     <AppProvider>
-      <BrowserRouter basename="/Adisyon-Temel">
+      <BrowserRouter>
         <AppContent />
       </BrowserRouter>
     </AppProvider>

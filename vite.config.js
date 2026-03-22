@@ -6,6 +6,6 @@ export default defineConfig({
   plugins: [react()],
   base: '/Adisyon-Temel/',
   build: {
-    outDir: 'docs',
+    outDir: 'dist',
   },
 })

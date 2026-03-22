@@ -17,9 +17,9 @@ const TableList = () => {
 
   const getStatusText = (status) => {
     switch (status) {
-      case 'empty': return 'Boş';
+      case 'empty': return 'Bos';
       case 'occupied': return 'Dolu';
-      case 'paid': return 'Ödendi';
+      case 'paid': return 'Odendi';
       default: return status;
     }
   };

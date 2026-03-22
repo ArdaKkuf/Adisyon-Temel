@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { Check, X, DollarSign, Calendar, Moon } from 'lucide-react';
+import { DollarSign, Calendar, Moon, ShoppingCart, Plus, Minus } from 'lucide-react';
 
 const Dashboard = () => {
-  const navigate = useNavigate();
-  const { tables, menu, addOrder, closeTable, orders, addTransaction } = useApp();
+  const { tables, menu, addOrder, closeTable, orders, addTransaction, getStock } = useApp();
   const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState([]);
 
   const addToCart = (item) => {
+    const stock = getStock(item.id);
+
     setCart(prevCart => {
       const existing = prevCart.find(c => c.id === item.id);
       if (existing) {
+        if (existing.quantity >= stock) {
+          return prevCart;
+        }
         return prevCart.map(c =>
           c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
         );
@@ -37,11 +40,11 @@ const Dashboard = () => {
     if (cart.length === 0 || !selectedTable) return;
     addOrder(selectedTable.id, cart);
     setCart([]);
+    alert('Siparis verildi!');
   };
 
   const handlePayment = (table) => {
     closeTable(table.id);
-    // Seçili masayı temizle
     setSelectedTable(null);
     setCart([]);
   };
@@ -56,18 +59,13 @@ const Dashboard = () => {
       return acc;
     }, {});
 
-  // Gün sonu hesaplama
   const getDailySummary = () => {
     const activeOrders = orders.filter(o => o.status !== 'paid');
-
-    // Bugünkü TÜRN siparişleri (aktif + bugün ödenmiş)
     const today = new Date().toDateString();
     const todayOrders = orders.filter(o => {
       const orderDate = new Date(o.createdAt).toDateString();
       return orderDate === today && o.status === 'paid';
     });
-
-    // Aktif masalardaki + bugün ödenmiş siparişlerin toplamı
     const activeRevenue = tables.reduce((sum, table) => sum + table.totalAmount, 0);
     const todayPaidRevenue = todayOrders.reduce((sum, order) => {
       return sum + order.items.reduce((s, item) => s + (item.price * item.quantity), 0);
@@ -84,14 +82,13 @@ const Dashboard = () => {
     const summary = getDailySummary();
 
     if (summary.activeOrders === 0 && summary.totalRevenue === 0) {
-      alert('Aktif sipariş veya ciro yok, gün sonunu yapamazsınız.');
+      alert('Aktif siparis veya ciro yok, gun sonunu yapamazsiniz.');
       return;
     }
 
-    const message = `GÜN SONU ÖZETİ\n\nAktif Sipariş: ${summary.activeOrders}\nToplam Tutar: ₺${summary.totalRevenue.toFixed(2)}\nDolu Masa: ${summary.activeTables}\n\nTüm aktif siparişler ödenecek, masalar kapatılacak ve ciro yönetici paneline eklenecek.\n\nDevam etmek istiyor musunuz?`;
+    const message = `GUN SONU OZETI\n\nAktif Siparis: ${summary.activeOrders}\nToplam Tutar: ₺${summary.totalRevenue.toFixed(2)}\nDolu Masa: ${summary.activeTables}\n\nTüm aktif siparisler ödenecek, masalar kapatilacak ve ciro yönetici paneline eklenecek.\n\nDevam etmek istiyor musunuz?`;
 
     if (window.confirm(message)) {
-      // Sadece aktif masalardaki ciroyu kaydet (daha önce ödenmişleri tekrar ekleme)
       const activeRevenue = tables.reduce((sum, table) => sum + table.totalAmount, 0);
       const today = new Date().toISOString().split('T')[0];
 
@@ -104,16 +101,18 @@ const Dashboard = () => {
         });
       }
 
-      // Masaları kapat
       tables.filter(t => t.status === 'occupied').forEach(table => {
         closeTable(table.id);
       });
 
       setSelectedTable(null);
       setCart([]);
-      alert('Gün sonu başarıyla tamamlandı! Ciro yönetici paneline eklendi.');
+      alert('Gün sonu başarıyla tamamlandi! Ciro yönetici paneline eklendi.');
     }
   };
+
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div>
@@ -128,11 +127,10 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Gün Sonu Özeti */}
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-xl shadow-sm p-6 mb-6 border border-purple-200 dark:border-purple-800">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Aktif Sipariş</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Aktif Siparis</p>
             <p className="text-3xl font-bold text-purple-700 dark:text-purple-400">{getDailySummary().activeOrders}</p>
           </div>
           <div className="text-center">
@@ -147,65 +145,86 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Masalar */}
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Masalar</h3>
-            <div className="space-y-2">
-              {tables.map((table) => (
-                <button
-                  key={table.id}
-                  onClick={() => setSelectedTable(table)}
-                  className={`w-full p-4 rounded-lg text-left transition ${
-                    selectedTable?.id === table.id
-                      ? 'bg-primary text-white'
-                      : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium">{table.name}</span>
-                    {table.totalAmount > 0 && (
-                      <span className="font-bold">₺{table.totalAmount.toFixed(2)}</span>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Masalar</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {tables.map((table) => (
+              <button
+                key={table.id}
+                onClick={() => {
+                  if (cart.length > 0) {
+                    if (window.confirm('Sepet temizlenecek, emin misiniz?')) {
+                      setSelectedTable(table);
+                      setCart([]);
+                    }
+                  } else {
+                    setSelectedTable(table);
+                  }
+                }}
+                className={`${
+                  selectedTable?.id === table.id
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'
+                } rounded-lg p-4 text-left transition`}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-medium">{table.name}</span>
+                  {table.totalAmount > 0 && (
+                    <span className="font-bold text-sm">₺{table.totalAmount.toFixed(2)}</span>
+                  )}
+                </div>
+                <div className="text-xs">
+                  {table.status === 'empty' ? 'Bos' : table.status === 'occupied' ? 'Dolu' : 'Odendi'}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Menü ve Sipariş */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           {selectedTable ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Menü */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Menü - {selectedTable.name}</h3>
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Menu - {selectedTable.name}</h3>
                 {Object.entries(groupedMenu).map(([category, items]) => (
                   <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
                     <h4 className="font-medium text-gray-900 dark:text-white mb-3">{category}</h4>
                     <div className="grid grid-cols-2 gap-2">
-                      {items.map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => addToCart(item)}
-                          className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-left"
-                        >
-                          <div className="font-medium text-sm text-gray-900 dark:text-white">{item.name}</div>
-                          <div className="text-primary font-bold text-sm">₺{item.price.toFixed(2)}</div>
-                        </button>
-                      ))}
+                      {items.map((item) => {
+                        const stock = getStock(item.id);
+                        const cartItem = cart.find(c => c.id === item.id);
+                        const quantity = cartItem?.quantity || 0;
+
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => addToCart(item)}
+                            disabled={stock <= 0}
+                            className={`bg-gray-50 dark:bg-gray-700 rounded-lg p-3 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-left ${
+                              stock <= 0 ? 'opacity-50 cursor-not-allowed' : ''
+                            }`}
+                          >
+                            <div className="font-medium text-sm text-gray-900 dark:text-white">{item.name}</div>
+                            <div className="text-primary font-bold text-sm">₺{item.price.toFixed(2)}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">Stok: {stock}</div>
+                            {quantity > 0 && (
+                              <div className="mt-1 bg-primary text-white text-xs px-2 py-1 rounded-full inline-block">
+                                {quantity}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
               </div>
 
-              {/* Sepet ve Ödeme */}
               <div className="space-y-4">
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sipariş</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Siparis</h3>
                   {cart.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">Sepet boş</p>
+                    <p className="text-gray-500 dark:text-gray-400 text-center py-4">Sepet bos</p>
                   ) : (
                     <>
                       <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
@@ -214,7 +233,10 @@ const Dashboard = () => {
                             <span className="text-sm text-gray-900 dark:text-white">{item.quantity}x {item.name}</span>
                             <div className="flex items-center gap-2">
                               <button onClick={() => removeFromCart(item.id)} className="p-1 bg-red-100 dark:bg-red-900/20 rounded">
-                                <X size={14} />
+                                <Minus size={14} />
+                              </button>
+                              <button onClick={() => addToCart(item)} className="p-1 bg-green-100 dark:bg-green-900/20 rounded">
+                                <Plus size={14} />
                               </button>
                             </div>
                           </div>
@@ -224,13 +246,12 @@ const Dashboard = () => {
                         onClick={submitOrder}
                         className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition"
                       >
-                        Siparişi Onayla
+                        Siparisi Onayla
                       </button>
                     </>
                   )}
                 </div>
 
-                {/* Hesap Kapatma */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Hesap</h3>
                   <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg p-4 mb-4">
@@ -247,7 +268,7 @@ const Dashboard = () => {
                       className="w-full bg-success text-white py-3 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2"
                     >
                       <DollarSign size={20} />
-                      Hesabı Al ve Kapat
+                      Hesabi Al ve Kapat
                     </button>
                   )}
                 </div>
@@ -255,7 +276,7 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-12 text-center">
-              <p className="text-gray-500 dark:text-gray-400">Masa seçin</p>
+              <p className="text-gray-500 dark:text-gray-400">Masa secin</p>
             </div>
           )}
         </div>

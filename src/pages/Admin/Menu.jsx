@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Plus, Pencil, Trash2, Save, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Save, X, QrCode } from 'lucide-react';
 import { menuCategories } from '../../data/initialData';
+import { QRCodeSVG } from 'qrcode.react';
 
 const Menu = () => {
   const { menu, addMenuItem, updateMenuItem, deleteMenuItem } = useApp();
   const [isEditing, setIsEditing] = useState(null);
   const [editForm, setEditForm] = useState({ name: '', price: '', category: '' });
   const [newForm, setNewForm] = useState({ name: '', price: '', category: 'İçecekler' });
+  const [showQRModal, setShowQRModal] = useState(false);
+
+  const qrUrl = window.location.origin + '/qr-menu';
 
   const handleEdit = (item) => {
     setIsEditing(item.id);
@@ -57,7 +61,16 @@ const Menu = () => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Menü Yönetimi</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Menü Yönetimi</h2>
+        <button
+          onClick={() => setShowQRModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg hover:from-orange-600 hover:to-amber-600 transition shadow-md"
+        >
+          <QrCode size={20} />
+          QR Menü
+        </button>
+      </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Yeni Ürün Ekle</h3>
@@ -208,6 +221,67 @@ const Menu = () => {
           </div>
         ))}
       </div>
+
+      {/* QR Modal */}
+      {showQRModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-900 bg-opacity-75 transition-opacity"
+              onClick={() => setShowQRModal(false)}
+            ></div>
+
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+              <div className="bg-gradient-to-r from-orange-500 to-amber-500 px-4 py-3 sm:px-6 flex items-center justify-between">
+                <h3 className="text-lg leading-6 font-medium text-white">QR Menü</h3>
+                <button
+                  onClick={() => setShowQRModal(false)}
+                  className="text-white hover:text-gray-200"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="px-4 py-5 sm:p-6">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-lg">
+                  <div className="flex justify-center mb-4">
+                    <QRCodeSVG
+                      value={qrUrl}
+                      size={200}
+                      level={"M"}
+                      includeMargin={true}
+                    />
+                  </div>
+                  <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    QR kodu okutarak menüyü görüntüleyin
+                  </p>
+                  <p className="text-center text-xs text-gray-500 dark:text-gray-500 break-all">
+                    {qrUrl}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(qrUrl);
+                      alert('URL kopyalandı!');
+                    }}
+                    className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition"
+                  >
+                    URL Kopyala
+                  </button>
+                  <button
+                    onClick={() => setShowQRModal(false)}
+                    className="flex-1 px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-400 dark:hover:bg-gray-500 transition"
+                  >
+                    Kapat
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

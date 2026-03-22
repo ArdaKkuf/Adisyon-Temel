@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Plus, Minus, Check } from 'lucide-react';
-import { menuCategories } from '../../data/initialData';
+import { ArrowLeft, Plus, Minus, ShoppingCart } from 'lucide-react';
 
 const TableDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tables, menu, addOrder, closeTable } = useApp();
+  const { tables, menu, addOrder, closeTable, getStock } = useApp();
   const [cart, setCart] = useState([]);
 
   const table = tables.find(t => t.id === parseInt(id));
@@ -15,12 +14,12 @@ const TableDetail = () => {
   if (!table) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-xl text-gray-600 dark:text-gray-400">Masa bulunamadı</h2>
+        <h2 className="text-xl text-gray-600 dark:text-gray-400">Masa bulunamadi</h2>
         <button
           onClick={() => navigate('/garson')}
           className="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition"
         >
-          Geri Dön
+          Geri Don
         </button>
       </div>
     );
@@ -37,9 +36,14 @@ const TableDetail = () => {
     }, {});
 
   const addToCart = (item) => {
+    const stock = getStock(item.id);
+
     setCart(prevCart => {
       const existing = prevCart.find(c => c.id === item.id);
       if (existing) {
+        if (existing.quantity >= stock) {
+          return prevCart;
+        }
         return prevCart.map(c =>
           c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
         );
@@ -65,9 +69,11 @@ const TableDetail = () => {
 
     addOrder(table.id, cart);
     setCart([]);
+    alert('Siparis verildi!');
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <div>
@@ -87,7 +93,7 @@ const TableDetail = () => {
             table.status === 'occupied' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
             'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
           }`}>
-            {table.status === 'empty' ? 'Boş' : table.status === 'occupied' ? 'Dolu' : 'Ödendi'}
+            {table.status === 'empty' ? 'Bos' : table.status === 'occupied' ? 'Dolu' : 'Odendi'}
           </span>
           {table.totalAmount > 0 && (
             <span className="text-lg font-bold text-gray-900 dark:text-white">
@@ -98,42 +104,57 @@ const TableDetail = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Menü */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-4 max-h-[70vh] overflow-y-auto pb-20">
           {Object.entries(groupedMenu).map(([category, items]) => (
-            <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{category}</h3>
+            <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{category}</h3>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {items.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => addToCart(item)}
-                    className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 hover:bg-gray-100 dark:hover:bg-gray-600 transition text-left"
-                  >
-                    <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
-                    <div className="text-primary font-bold mt-1">₺{item.price.toFixed(2)}</div>
-                  </button>
-                ))}
+                {items.map((item) => {
+                  const stock = getStock(item.id);
+                  const cartItem = cart.find(c => c.id === item.id);
+                  const quantity = cartItem?.quantity || 0;
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => addToCart(item)}
+                      disabled={stock <= 0}
+                      className={`bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left transition transform active:scale-95 ${
+                        stock <= 0
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer'
+                      }`}
+                    >
+                      <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
+                      <div className="text-primary font-bold mt-1">₺{item.price.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Stok: {stock}</div>
+                      {quantity > 0 && (
+                        <div className="mt-1 bg-primary text-white text-xs px-2 py-1 rounded-full inline-block">
+                          {quantity}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Sepet */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 sticky top-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Sipariş</h3>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 lg:sticky lg:top-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Siparis</h3>
 
             {cart.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 text-center py-8">Sepet boş</p>
+              <p className="text-gray-500 dark:text-gray-400 text-center py-8">Sepet bos</p>
             ) : (
               <>
-                <div className="space-y-3 mb-4 max-h-64 overflow-y-auto">
+                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
                   {cart.map((item) => (
                     <div key={item.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                       <div className="flex-1">
                         <p className="font-medium text-gray-900 dark:text-white text-sm">{item.name}</p>
-                        <p className="text-primary text-sm font-bold">₺{item.price.toFixed(2)}</p>
+                        <p className="text-primary text-sm font-bold">₺{(item.price * item.quantity).toFixed(2)}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -163,10 +184,10 @@ const TableDetail = () => {
 
                 <button
                   onClick={submitOrder}
-                  className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2 mb-3"
+                  className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2"
                 >
-                  <Check size={20} />
-                  Siparişi Onayla
+                  <ShoppingCart size={20} />
+                  Siparis Ver ({cartItemCount})
                 </button>
               </>
             )}
