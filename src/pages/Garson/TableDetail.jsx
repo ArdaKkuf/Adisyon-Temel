@@ -8,6 +8,7 @@ const TableDetail = () => {
   const navigate = useNavigate();
   const { tables, menu, addOrder, closeTable, getStock } = useApp();
   const [cart, setCart] = useState([]);
+  const [orderSuccess, setOrderSuccess] = useState(false);
 
   const table = tables.find(t => t.id === parseInt(id));
 
@@ -67,9 +68,15 @@ const TableDetail = () => {
   const submitOrder = () => {
     if (cart.length === 0) return;
 
-    addOrder(table.id, cart);
-    setCart([]);
-    alert('Siparis verildi!');
+    try {
+      addOrder(table.id, cart);
+      setCart([]);
+      setOrderSuccess(true);
+      setTimeout(() => setOrderSuccess(false), 2000);
+      console.log('Siparis basariyla verildi:', table.id, cart);
+    } catch (error) {
+      console.error('Siparis hatasi:', error);
+    }
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -184,10 +191,15 @@ const TableDetail = () => {
 
                 <button
                   onClick={submitOrder}
-                  className="w-full bg-primary text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-2"
+                  className={`w-full py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                    orderSuccess
+                      ? 'bg-green-500 text-white'
+                      : 'bg-primary text-white hover:bg-blue-600'
+                  }`}
+                  disabled={orderSuccess}
                 >
                   <ShoppingCart size={20} />
-                  Siparis Ver ({cartItemCount})
+                  {orderSuccess ? '✓ Siparis Verildi' : `Siparis Ver (${cartItemCount})`}
                 </button>
               </>
             )}

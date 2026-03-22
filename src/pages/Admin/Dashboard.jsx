@@ -6,6 +6,8 @@ const Dashboard = () => {
   const { tables, menu, addOrder, closeTable, orders, addTransaction, getStock } = useApp();
   const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState([]);
+  const [orderSuccess, setOrderSuccess] = useState(false);
+  const [endOfDaySuccess, setEndOfDaySuccess] = useState(false);
 
   const addToCart = (item) => {
     const stock = getStock(item.id);
@@ -38,9 +40,16 @@ const Dashboard = () => {
 
   const submitOrder = () => {
     if (cart.length === 0 || !selectedTable) return;
-    addOrder(selectedTable.id, cart);
-    setCart([]);
-    alert('Siparis verildi!');
+
+    try {
+      addOrder(selectedTable.id, cart);
+      setCart([]);
+      setOrderSuccess(true);
+      setTimeout(() => setOrderSuccess(false), 2000);
+      console.log('Siparis basariyla verildi:', selectedTable.id, cart);
+    } catch (error) {
+      console.error('Siparis hatasi:', error);
+    }
   };
 
   const handlePayment = (table) => {
@@ -82,7 +91,7 @@ const Dashboard = () => {
     const summary = getDailySummary();
 
     if (summary.activeOrders === 0 && summary.totalRevenue === 0) {
-      alert('Aktif siparis veya ciro yok, gun sonunu yapamazsiniz.');
+      console.log('Aktif siparis veya ciro yok');
       return;
     }
 
@@ -107,7 +116,9 @@ const Dashboard = () => {
 
       setSelectedTable(null);
       setCart([]);
-      alert('Gün sonu başarıyla tamamlandi! Ciro yönetici paneline eklendi.');
+      setEndOfDaySuccess(true);
+      setTimeout(() => setEndOfDaySuccess(false), 3000);
+      console.log('Gün sonu tamamlandi:', { activeRevenue, today });
     }
   };
 
@@ -120,10 +131,15 @@ const Dashboard = () => {
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Kasa</h2>
         <button
           onClick={handleEndOfDay}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-indigo-700 transition shadow-md"
+          className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition shadow-md ${
+            endOfDaySuccess
+              ? 'bg-gradient-to-r from-green-500 to-green-600 text-white'
+              : 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-700 hover:to-indigo-700'
+          }`}
+          disabled={endOfDaySuccess}
         >
           <Moon size={20} />
-          Gün Sonu
+          {endOfDaySuccess ? '✓ Gün Sonu Tamamlandi' : 'Gün Sonu'}
         </button>
       </div>
 
@@ -244,9 +260,14 @@ const Dashboard = () => {
                       </div>
                       <button
                         onClick={submitOrder}
-                        className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition"
+                        className={`w-full py-2 rounded-lg font-medium transition ${
+                          orderSuccess
+                            ? 'bg-green-500 text-white'
+                            : 'bg-primary text-white hover:bg-blue-600'
+                        }`}
+                        disabled={orderSuccess}
                       >
-                        Siparisi Onayla
+                        {orderSuccess ? '✓ Siparis Verildi' : 'Siparisi Onayla'}
                       </button>
                     </>
                   )}
