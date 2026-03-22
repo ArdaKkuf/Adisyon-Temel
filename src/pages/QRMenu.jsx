@@ -6,6 +6,10 @@ const QRMenu = () => {
   const { menu, getStock } = useApp();
   const [selectedCategory, setSelectedCategory] = useState('Tümü');
 
+  // Debug
+  console.log('QR Menu - menu:', menu);
+  console.log('QR Menu - active items:', menu.filter(item => item.active));
+
   // Group menu by category
   const groupedMenu = menu
     .filter(item => item.active)
@@ -61,13 +65,20 @@ const QRMenu = () => {
 
       {/* Menu Items */}
       <div className="max-w-4xl mx-auto px-4 py-6">
-        {selectedCategory !== 'Tümü' && (
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{selectedCategory}</h2>
+        {menu.filter(item => item.active).length === 0 ? (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-12 text-center">
+            <p className="text-gray-500 dark:text-gray-400 text-lg">Menü yükleniyor...</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">Lütfen daha sonra tekrar deneyin</p>
           </div>
-        )}
+        ) : (
+          <>
+            {selectedCategory !== 'Tümü' && (
+              <div className="mb-6">
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">{selectedCategory}</h2>
+              </div>
+            )}
 
-        {selectedCategory === 'Tümü' ? (
+            {selectedCategory === 'Tümü' ? (
           <div className="space-y-8">
             {Object.entries(groupedMenu).map(([category, items]) => (
               <div key={category}>
@@ -149,6 +160,8 @@ const QRMenu = () => {
               );
             })}
           </div>
+        )}
+        </>
         )}
       </div>
 
