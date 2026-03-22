@@ -30,12 +30,16 @@ const Header = () => {
 
   return (
     <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-      <div className="flex items-center justify-between px-6 py-4">
+      <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">Adisyon Sistemi</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{user.role === 'admin' ? 'Admin Paneli' : 'Garson Paneli'}</p>
+          <h1 className="text-lg md:text-xl font-bold text-gray-900 dark:text-white">Adisyon</h1>
+          <p className="text-xs md:text-sm text-gray-500 dark:text-gray-400 hidden md:block">
+            {user.role === 'admin' ? 'Admin Paneli' : 'Garson Paneli'}
+          </p>
         </div>
-        <div className="flex items-center gap-4">
+
+        {/* Desktop kontroller */}
+        <div className="hidden md:flex items-center gap-4">
           <button
             onClick={toggleTheme}
             className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition"
@@ -53,6 +57,22 @@ const Header = () => {
           >
             <LogOut size={18} />
             Çıkış
+          </button>
+        </div>
+
+        {/* Mobil kontroller */}
+        <div className="flex md:hidden items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700"
+          >
+            {isDark ? <Sun size={16} className="text-yellow-500" /> : <Moon size={16} className="text-gray-600" />}
+          </button>
+          <button
+            onClick={logout}
+            className="p-2 rounded-lg bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400"
+          >
+            <LogOut size={16} />
           </button>
         </div>
       </div>
