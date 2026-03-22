@@ -53,7 +53,7 @@ function AppContent() {
 function App() {
   return (
     <AppProvider>
-      <BrowserRouter>
+      <BrowserRouter basename="/Adisyon-Temel">
         <AppContent />
       </BrowserRouter>
     </AppProvider>
