@@ -1,17 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Lock, Unlock, TrendingUp, ArrowDown, DollarSign, Plus, Trash2, BarChart3 } from 'lucide-react';
+import { Lock, Unlock, TrendingUp, ArrowDown, DollarSign, Plus, Trash2, BarChart3, Calendar, PieChart } from 'lucide-react';
 
 const Manager = () => {
   const { managerUnlocked, unlockManager, lockManager, transactions, addTransaction, deleteTransaction, getIncomeExpense, tables, orders } = useApp();
   const [password, setPassword] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [dateRange, setDateRange] = useState('all'); // all, today, week, month, custom
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [newTransaction, setNewTransaction] = useState({
     type: 'income',
+    category: 'other',
     description: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
   });
+
+  // Tarih filtreleme fonksiyonu
+  const filterByDate = (items) => {
+    if (dateRange === 'all') return items;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    return items.filter(item => {
+      const itemDate = new Date(item.date || item.createdAt);
+
+      if (dateRange === 'today') {
+        return itemDate >= today;
+      } else if (dateRange === 'week') {
+        return itemDate >= weekAgo;
+      } else if (dateRange === 'month') {
+        return itemDate >= monthAgo;
+      } else if (dateRange === 'custom' && customStartDate && customEndDate) {
+        const start = new Date(customStartDate);
+        const end = new Date(customEndDate);
+        end.setHours(23, 59, 59);
+        return itemDate >= start && itemDate <= end;
+      }
+      return true;
+    });
+  };
 
   if (!managerUnlocked) {
     return (
@@ -76,18 +108,72 @@ const Manager = () => {
   const safeTransactions = transactions || [];
   const safeTables = tables || [];
 
+  // Filtrelenmiş veriler
+  const filteredOrders = useMemo(() => filterByDate(safeOrders), [safeOrders, dateRange, customStartDate, customEndDate]);
+  const filteredTransactions = useMemo(() => filterByDate(safeTransactions), [safeTransactions, dateRange, customStartDate, customEndDate]);
+
   // Bakiye hesapla - gelir - gider (gün sonu kasası dahil)
-  const income = safeTransactions
+  const income = filteredTransactions
     .filter(t => t.type === 'income')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-  const expense = safeTransactions
+  const expense = filteredTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const balance = income - expense;
 
-  // Ciro hesaplama
+  // Ciro hesaplama (siparişlerden)
+  const totalRevenue = filteredOrders
+    .filter(o => o.status === 'paid')
+    .reduce((sum, order) => {
+      return sum + (order.items?.reduce((s, item) => {
+        const price = item.isComplimentary ? 0 : item.price;
+        return s + (price * item.quantity);
+      }, 0) || 0);
+    }, 0);
+
+  // İkram toplamı
+  const complimentaryTotal = filteredOrders
+    .reduce((sum, order) => {
+      return sum + (order.items?.reduce((s, item) => {
+        if (item.isComplimentary) {
+          return s + (item.price * item.quantity);
+        }
+        return s;
+      }, 0) || 0);
+    }, 0);
+
+  // Ödeme yöntemine göre breakdown
+  const paymentMethodBreakdown = useMemo(() => {
+    const cashTotal = filteredTransactions
+      .filter(t => t.type === 'income' && t.paymentMethod === 'cash')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const cardTotal = filteredTransactions
+      .filter(t => t.type === 'income' && t.paymentMethod === 'card')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const otherTotal = filteredTransactions
+      .filter(t => t.type === 'income' && (!t.paymentMethod || t.paymentMethod === 'split'))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return { cash: cashTotal, card: cardTotal, other: otherTotal };
+  }, [filteredTransactions]);
+
+  // Kategori bazlı giderler
+  const expensesByCategory = useMemo(() => {
+    const categories = {};
+    filteredTransactions
+      .filter(t => t.type === 'expense')
+      .forEach(t => {
+        const cat = t.category || 'other';
+        categories[cat] = (categories[cat] || 0) + t.amount;
+      });
+    return categories;
+  }, [filteredTransactions]);
+
+  // Bugünkü siparişler
   const todayOrders = safeOrders.filter(o => {
     const orderDate = new Date(o.createdAt).toDateString();
     const today = new Date().toDateString();
@@ -111,29 +197,66 @@ const Manager = () => {
     };
   }).sort((a, b) => b.revenue - a.revenue);
 
-  const sortedTransactions = [...safeTransactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Yönetici Paneli</h2>
-        <button
-          onClick={lockManager}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
-        >
-          <Lock size={18} />
-          Kilitle
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Tarih Filtresi */}
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg appearance-none"
+            >
+              <option value="all">Tüm Zamanlar</option>
+              <option value="today">Bugün</option>
+              <option value="week">Son 7 Gün</option>
+              <option value="month">Son 30 Gün</option>
+              <option value="custom">Özel Tarih</option>
+            </select>
+          </div>
+
+          {dateRange === 'custom' && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg"
+              />
+              <span className="text-gray-500">-</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg"
+              />
+            </div>
+          )}
+
+          <button
+            onClick={lockManager}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition"
+          >
+            <Lock size={18} />
+            Kilitle
+          </button>
+        </div>
       </div>
 
       {/* Gelir/Gider Özeti */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-6 text-white">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-medium opacity-90">Toplam Gelir</h3>
             <TrendingUp size={20} />
           </div>
           <p className="text-3xl font-bold">₺{income.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-2">{filteredTransactions.filter(t => t.type === 'income').length} işlem</p>
         </div>
 
         <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-6 text-white">
@@ -142,6 +265,7 @@ const Manager = () => {
             <ArrowDown size={20} />
           </div>
           <p className="text-3xl font-bold">₺{expense.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-2">{filteredTransactions.filter(t => t.type === 'expense').length} işlem</p>
         </div>
 
         <div className={`bg-gradient-to-br rounded-xl shadow-sm p-6 text-white ${balance >= 0 ? 'from-blue-500 to-blue-600' : 'from-gray-600 to-gray-700'}`}>
@@ -150,20 +274,72 @@ const Manager = () => {
             <DollarSign size={20} />
           </div>
           <p className="text-3xl font-bold">₺{balance.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-2">{balance >= 0 ? 'Kâr' : 'Zarar'}</p>
         </div>
 
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-sm p-6 text-white">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-sm p-6 text-white">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium opacity-90">Bugunki Ciro</h3>
+            <h3 className="text-sm font-medium opacity-90">Ciro (Sipariş)</h3>
             <BarChart3 size={20} />
           </div>
-          <p className="text-3xl font-bold">₺{todayRevenue.toFixed(2)}</p>
-          <p className="text-sm opacity-90 mt-2">{todayOrders.length} sipariş</p>
+          <p className="text-3xl font-bold">₺{totalRevenue.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-2">{filteredOrders.filter(o => o.status === 'paid').length} sipariş</p>
+        </div>
+
+        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl shadow-sm p-6 text-white">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium opacity-90">İkram Toplam</h3>
+            <PieChart size={20} />
+          </div>
+          <p className="text-3xl font-bold">₺{complimentaryTotal.toFixed(2)}</p>
+          <p className="text-sm opacity-90 mt-2">İndirim/İkram</p>
         </div>
       </div>
 
+      {/* Ödeme Yöntemi Breakdown */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Ödeme Yöntemlerine Göre Gelir</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Nakit</p>
+            <p className="text-2xl font-bold text-green-600 dark:text-green-400">₺{paymentMethodBreakdown.cash.toFixed(2)}</p>
+          </div>
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Kart</p>
+            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">₺{paymentMethodBreakdown.card.toFixed(2)}</p>
+          </div>
+          <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Diğer</p>
+            <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">₺{paymentMethodBreakdown.other.toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Gider Kategorileri */}
+      {Object.keys(expensesByCategory).length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-8">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gider Kategorileri</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {Object.entries(expensesByCategory).map(([category, amount]) => (
+              <div key={category} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 capitalize">{category}</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white">₺{amount.toFixed(2)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Gelir/Gider İşlemleri */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Gelir / Gider İşlemleri</h3>
+          {dateRange !== 'all' && (
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              ({dateRange === 'today' ? 'Bugün' : dateRange === 'week' ? 'Son 7 Gün' : dateRange === 'month' ? 'Son 30 Gün' : 'Özel Tarih'})
+            </span>
+          )}
+        </div>
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Gelir / Gider İşlemleri</h3>
           <button
