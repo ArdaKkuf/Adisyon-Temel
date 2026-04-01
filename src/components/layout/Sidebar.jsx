@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UtensilsCrossed, Users, Settings, Home, Receipt, BookOpen } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Users, Settings, Home, Receipt, BookOpen, Tag } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 const Sidebar = () => {
@@ -11,6 +11,7 @@ const Sidebar = () => {
     { path: '/admin', icon: LayoutDashboard, label: 'Kasa' },
     { path: '/admin/tables', icon: UtensilsCrossed, label: 'Masalar' },
     { path: '/admin/menu', icon: Users, label: 'Menü' },
+    { path: '/admin/categories', icon: Tag, label: 'Kategoriler' },
     { path: '/admin/reports', icon: Settings, label: 'Raporlar' },
     { path: '/admin/manager', icon: Settings, label: 'Yönetici' },
   ];

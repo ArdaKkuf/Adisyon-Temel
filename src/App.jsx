@@ -9,6 +9,7 @@ import Menu from './pages/Admin/Menu';
 import Reports from './pages/Admin/Reports';
 import Manager from './pages/Admin/Manager';
 import Cashier from './pages/Admin/Cashier';
+import Categories from './pages/Admin/Categories';
 import TableList from './pages/Garson/TableList';
 import TableDetail from './pages/Garson/TableDetail';
 import Orders from './pages/Garson/Orders';
@@ -35,6 +36,7 @@ function AppContent() {
           <Route index element={<Dashboard />} />
           <Route path="tables" element={<Tables />} />
           <Route path="menu" element={<Menu />} />
+          <Route path="categories" element={<Categories />} />
           <Route path="reports" element={<Reports />} />
           <Route path="manager" element={<Manager />} />
         </Route>
