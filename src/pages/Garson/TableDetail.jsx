@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Plus, Minus, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock } from 'lucide-react';
+import OrderConfirmationModal from '../../components/orders/OrderConfirmationModal';
 
 const TableDetail = () => {
   const { id } = useParams();
@@ -9,6 +10,7 @@ const TableDetail = () => {
   const { tables, menu, addOrder, closeTable, getStock } = useApp();
   const [cart, setCart] = useState([]);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const table = tables.find(t => t.id === parseInt(id));
 
@@ -53,8 +55,11 @@ const TableDetail = () => {
     });
   };
 
-  const removeFromCart = (itemId) => {
+  const removeFromCart = (itemId, completely = false) => {
     setCart(prevCart => {
+      if (completely) {
+        return prevCart.filter(c => c.id !== itemId);
+      }
       const existing = prevCart.find(c => c.id === itemId);
       if (existing && existing.quantity > 1) {
         return prevCart.map(c =>
@@ -67,16 +72,31 @@ const TableDetail = () => {
 
   const submitOrder = () => {
     if (cart.length === 0) return;
+    setShowConfirmModal(true);
+  };
 
+  const confirmOrder = () => {
     try {
       addOrder(table.id, cart);
       setCart([]);
+      setShowConfirmModal(false);
       setOrderSuccess(true);
       setTimeout(() => setOrderSuccess(false), 2000);
-      console.log('Siparis basariyla verildi:', table.id, cart);
     } catch (error) {
       console.error('Siparis hatasi:', error);
     }
+  };
+
+  // Oturum süresi hesaplama
+  const getSessionDuration = (table) => {
+    if (!table.occupiedAt) return null;
+    const occupied = new Date(table.occupiedAt);
+    const now = new Date();
+    const diff = Math.floor((now - occupied) / 1000 / 60); // dakika
+    if (diff < 60) return `${diff} dk`;
+    const hours = Math.floor(diff / 60);
+    const mins = diff % 60;
+    return mins > 0 ? `${hours}sa ${mins}dk` : `${hours}sa`;
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -94,7 +114,7 @@ const TableDetail = () => {
 
       <div className="mb-6">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{table.name}</h2>
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-4 mt-2 flex-wrap">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
             table.status === 'empty' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
             table.status === 'occupied' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
@@ -105,6 +125,12 @@ const TableDetail = () => {
           {table.totalAmount > 0 && (
             <span className="text-lg font-bold text-gray-900 dark:text-white">
               Mevcut Tutar: ₺{table.totalAmount.toFixed(2)}
+            </span>
+          )}
+          {table.status === 'occupied' && getSessionDuration(table) && (
+            <span className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+              <Clock size={14} />
+              {getSessionDuration(table)}
             </span>
           )}
         </div>
@@ -167,6 +193,7 @@ const TableDetail = () => {
                         <button
                           onClick={() => removeFromCart(item.id)}
                           className="p-1 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/30 transition"
+                          title="Azalt"
                         >
                           <Minus size={16} />
                         </button>
@@ -174,8 +201,16 @@ const TableDetail = () => {
                         <button
                           onClick={() => addToCart(item)}
                           className="p-1 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/30 transition"
+                          title="Ekle"
                         >
                           <Plus size={16} />
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(item.id, true)}
+                          className="p-1 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/30 transition ml-1"
+                          title="Tamamen Sil"
+                        >
+                          <Trash2 size={16} />
                         </button>
                       </div>
                     </div>
@@ -206,6 +241,16 @@ const TableDetail = () => {
           </div>
         </div>
       </div>
+
+      {/* Sipariş Onay Modal */}
+      <OrderConfirmationModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={confirmOrder}
+        cart={cart}
+        tableName={table.name}
+        totalAmount={totalAmount}
+      />
     </div>
   );
 };

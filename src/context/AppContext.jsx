@@ -18,6 +18,37 @@ export const AppProvider = ({ children }) => {
     return stored ? JSON.parse(stored) : defaultValue;
   };
 
+  // Migration - Mevcut verileri yeni formata upgrade et
+  const migrateData = () => {
+    if (localStorage.getItem('migrated_v2')) return;
+
+    // Tables migration
+    const currentTables = JSON.parse(localStorage.getItem('tables')) || initialTables;
+    const migratedTables = currentTables.map(table => ({
+      ...table,
+      occupiedAt: table.occupiedAt || null,
+      sessionDuration: table.sessionDuration || 0,
+      lastOrderTime: table.lastOrderTime || null
+    }));
+    localStorage.setItem('tables', JSON.stringify(migratedTables));
+
+    // Orders migration
+    const currentOrders = JSON.parse(localStorage.getItem('orders')) || [];
+    const migratedOrders = currentOrders.map(order => ({
+      ...order,
+      paymentMethod: order.paymentMethod || 'cash',
+      paymentDetails: order.paymentDetails || null,
+      isComplimentary: order.isComplimentary || false,
+      complimentaryReason: order.complimentaryReason || ''
+    }));
+    localStorage.setItem('orders', JSON.stringify(migratedOrders));
+
+    localStorage.setItem('migrated_v2', 'true');
+  };
+
+  // Migration'ı çalıştır
+  migrateData();
+
   // State
   const [user, setUser] = useState(null);
   const [managerUnlocked, setManagerUnlocked] = useState(false);
@@ -130,17 +161,32 @@ export const AppProvider = ({ children }) => {
       items,
       status: 'pending', // pending -> preparing -> delivered -> paid
       createdAt: new Date().toISOString(),
+      paymentMethod: 'cash',
+      paymentDetails: null,
+      isComplimentary: false,
+      complimentaryReason: '',
     };
 
     setOrders([...orders, newOrder]);
 
     // Masayı güncelle
+    const table = tables.find(t => t.id === tableId);
+    const wasEmpty = table?.status === 'empty';
     const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    updateTable(tableId, {
+
+    const tableUpdates = {
       status: 'occupied',
       orders: [...orders.filter(o => o.tableId === tableId && o.status !== 'paid'), newOrder],
-      totalAmount,
-    });
+      totalAmount: (table?.totalAmount || 0) + totalAmount,
+      lastOrderTime: new Date().toISOString(),
+    };
+
+    // Eğer masa boştu, occupiedAt zamanını set et
+    if (wasEmpty) {
+      tableUpdates.occupiedAt = new Date().toISOString();
+    }
+
+    updateTable(tableId, tableUpdates);
 
     // Stoğu düş
     items.forEach(item => {
@@ -153,16 +199,37 @@ export const AppProvider = ({ children }) => {
   };
 
   const closeTable = (tableId) => {
+    const table = tables.find(t => t.id === tableId);
+
     // Önce siparişleri güncelle
     const updatedOrders = orders.map(order =>
       order.tableId === tableId && order.status !== 'paid'
-        ? { ...order, status: 'paid' }
+        ? {
+            ...order,
+            status: 'paid',
+            completedAt: new Date().toISOString(),
+          }
         : order
     );
     setOrders(updatedOrders);
 
+    // Session duration hesapla
+    let sessionDuration = 0;
+    if (table?.occupiedAt) {
+      const occupied = new Date(table.occupiedAt);
+      const now = new Date();
+      sessionDuration = Math.floor((now - occupied) / 1000 / 60); // dakika
+    }
+
     // Sonra masayı güncelle
-    updateTable(tableId, { status: 'empty', orders: [], totalAmount: 0 });
+    updateTable(tableId, {
+      status: 'empty',
+      orders: [],
+      totalAmount: 0,
+      occupiedAt: null,
+      sessionDuration,
+      lastOrderTime: null,
+    });
   };
 
   // Gelir/Gider işlemleri
