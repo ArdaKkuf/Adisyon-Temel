@@ -1,54 +1,25 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock, Gift, Move } from 'lucide-react';
-import OrderConfirmationModal from '../../components/orders/OrderConfirmationModal';
-import ComplimentaryModal from '../../components/payment/ComplimentaryModal';
-import TableTransferModal from '../../components/tables/TableTransferModal';
+import {
+  Plus, Minus, Trash2, Clock, Gift, Move, Divide,
+  CreditCard, Wallet, ArrowLeft, ShoppingCart, X
+} from 'lucide-react';
 import TableSessionTimer from '../../components/tables/TableSessionTimer';
 
 const TableDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tables, menu, addOrder, closeTable, getStock, transferTable } = useApp();
+  const {
+    tables, menu, addOrder, closeTable, getStock,
+    transferTable, processPayment, processSplitPayment, orders
+  } = useApp();
+
   const [cart, setCart] = useState([]);
   const [orderSuccess, setOrderSuccess] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
-  const [selectedComplimentaryItem, setSelectedComplimentaryItem] = useState(null);
-  const [showTransferModal, setShowTransferModal] = useState(false);
-
-  const handleComplimentary = (item) => {
-    setSelectedComplimentaryItem(item);
-    setShowComplimentaryModal(true);
-  };
-
-  const confirmComplimentary = (reason) => {
-    // İkra edilen ürünü sepete ekle (0 fiyat ile)
-    const complimentaryItem = {
-      ...selectedComplimentaryItem,
-      price: 0,
-      isComplimentary: true,
-      complimentaryReason: reason
-    };
-    setCart(prevCart => {
-      const existing = prevCart.find(c => c.id === complimentaryItem.id);
-      if (existing) {
-        return prevCart.map(c =>
-          c.id === complimentaryItem.id ? { ...c, quantity: c.quantity + 1, price: 0, isComplimentary: true, complimentaryReason: reason } : c
-        );
-      }
-      return [...prevCart, { ...complimentaryItem, quantity: 1 }];
-    });
-    setShowComplimentaryModal(false);
-    setSelectedComplimentaryItem(null);
-  };
-
-  const handleTransferTable = (targetTableId) => {
-    transferTable(table.id, targetTableId);
-    setShowTransferModal(false);
-    navigate('/garson');
-  };
+  const [showPayment, setShowPayment] = useState(false);
+  const [showComplimentary, setShowComplimentary] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null);
 
   const table = tables.find(t => t.id === parseInt(id));
 
@@ -56,281 +27,342 @@ const TableDetail = () => {
     return (
       <div className="text-center py-12">
         <h2 className="text-xl text-gray-600 dark:text-gray-400">Masa bulunamadi</h2>
-        <button
-          onClick={() => navigate('/garson')}
-          className="mt-4 px-6 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition"
-        >
-          Geri Don
+        <button onClick={() => navigate(-1)} className="mt-4 px-6 py-2 bg-primary text-white rounded-lg">
+          Geri
         </button>
       </div>
     );
   }
 
-  const groupedMenu = menu
-    .filter(item => item.active)
-    .reduce((acc, item) => {
-      if (!acc[item.category]) {
-        acc[item.category] = [];
-      }
-      acc[item.category].push(item);
-      return acc;
-    }, {});
-
+  // Sepet işlemleri
   const addToCart = (item) => {
-    const stock = getStock(item.id);
-
-    setCart(prevCart => {
-      const existing = prevCart.find(c => c.id === item.id);
-      if (existing) {
-        if (existing.quantity >= stock) {
-          return prevCart;
-        }
-        return prevCart.map(c =>
-          c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c
-        );
-      }
-      return [...prevCart, { ...item, quantity: 1 }];
+    setCart(prev => {
+      const existing = prev.find(c => c.id === item.id);
+      if (existing) return prev.map(c => c.id === item.id ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, { ...item, quantity: 1 }];
     });
   };
 
-  const removeFromCart = (itemId, completely = false) => {
-    setCart(prevCart => {
-      if (completely) {
-        return prevCart.filter(c => c.id !== itemId);
-      }
-      const existing = prevCart.find(c => c.id === itemId);
+  const removeFromCart = (itemId) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.id === itemId);
       if (existing && existing.quantity > 1) {
-        return prevCart.map(c =>
-          c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c
-        );
+        return prev.map(c => c.id === itemId ? { ...c, quantity: c.quantity - 1 } : c);
       }
-      return prevCart.filter(c => c.id !== itemId);
+      return prev.filter(c => c.id !== itemId);
     });
   };
 
+  const deleteFromCart = (itemId) => {
+    setCart(prev => prev.filter(c => c.id !== itemId));
+  };
+
+  // Sipariş ver
   const submitOrder = () => {
     if (cart.length === 0) return;
-    setShowConfirmModal(true);
+    if (!window.confirm('Siparişi onaylıyor musunuz?')) return;
+
+    addOrder(table.id, cart);
+    setCart([]);
+    setOrderSuccess(true);
+    setTimeout(() => setOrderSuccess(false), 2000);
   };
 
-  const confirmOrder = () => {
-    try {
-      addOrder(table.id, cart);
-      setCart([]);
-      setShowConfirmModal(false);
-      setOrderSuccess(true);
-      setTimeout(() => setOrderSuccess(false), 2000);
-    } catch (error) {
-      console.error('Siparis hatasi:', error);
-    }
+  // İkram
+  const handleComplimentary = (item) => {
+    setSelectedItem(item);
+    setShowComplimentary(true);
   };
 
-  // Oturum süresi hesaplama
-  const getSessionDuration = (table) => {
-    if (!table.occupiedAt) return null;
-    const occupied = new Date(table.occupiedAt);
-    const now = new Date();
-    const diff = Math.floor((now - occupied) / 1000 / 60); // dakika
-    if (diff < 60) return `${diff} dk`;
-    const hours = Math.floor(diff / 60);
-    const mins = diff % 60;
-    return mins > 0 ? `${hours}sa ${mins}dk` : `${hours}sa`;
+  const confirmComplimentary = (reason) => {
+    const complimentaryItem = { ...item, price: 0, isComplimentary: true, complimentaryReason: reason };
+    setCart(prev => {
+      const existing = prev.find(c => c.id === item.id);
+      if (existing) return prev.map(c => c.id === item.id ? { ...complimentaryItem, quantity: c.quantity + 1 } : c);
+      return [...prev, { ...complimentaryItem, quantity: 1 }];
+    });
+    setShowComplimentary(false);
+    setSelectedItem(null);
   };
 
-  const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  // Ödeme
+  const handlePayment = (method) => {
+    if (!window.confirm(`Ödeme alınıyor (${method === 'cash' ? 'Nakit' : 'Kart'}). Onaylıyor musunuz?`)) return;
+
+    processPayment(table.id, { method });
+    navigate(-1);
+  };
+
+  // Sipariş sil
+  const deleteOrder = (orderId) => {
+    if (!window.confirm('Bu siparişi silmek istiyor musunuz?')) return;
+    const updated = orders.filter(o => o.id !== orderId);
+    localStorage.setItem('orders', JSON.stringify(updated));
+    window.location.reload();
+  };
+
+  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const groupedMenu = menu.filter(item => item.active).reduce((acc, item) => {
+    if (!acc[item.category]) acc[item.category] = [];
+    acc[item.category].push(item);
+    return acc;
+  }, {});
+
+  const tableOrders = orders.filter(o => o.tableId === table.id && o.status !== 'paid');
 
   return (
-    <div>
-      <button
-        onClick={() => navigate('/garson')}
-        className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition"
-      >
-        <ArrowLeft size={20} />
-        Geri
-      </button>
-
-      <div className="mb-6">
-        <div className="flex items-start justify-between">
+    <div className="max-w-7xl mx-auto p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg">
+            <ArrowLeft size={24} />
+          </button>
           <div>
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{table.name}</h2>
-            <div className="flex items-center gap-4 mt-2 flex-wrap">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{table.name}</h1>
+            <div className="flex items-center gap-3 mt-1">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                table.status === 'empty' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-                table.status === 'occupied' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                table.status === 'occupied' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
               }`}>
-                {table.status === 'empty' ? 'Bos' : table.status === 'occupied' ? 'Dolu' : 'Odendi'}
+                {table.status === 'occupied' ? 'Dolu' : 'Bos'}
               </span>
               {table.totalAmount > 0 && (
                 <span className="text-lg font-bold text-gray-900 dark:text-white">
-                  Mevcut Tutar: ₺{table.totalAmount.toFixed(2)}
+                  ₺{table.totalAmount.toFixed(2)}
                 </span>
               )}
             </div>
           </div>
-          {table.status === 'occupied' && (
-            <button
-              onClick={() => setShowTransferModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-red-600 transition flex items-center gap-2"
-            >
-              <Move size={18} />
-              Masayı Taşı
-            </button>
-          )}
         </div>
-        {table.status === 'occupied' && (
-          <div className="mt-3">
-            <TableSessionTimer occupiedAt={table.occupiedAt} lastOrderTime={table.lastOrderTime} />
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4 max-h-[70vh] overflow-y-auto pb-20">
-          {Object.entries(groupedMenu).map(([category, items]) => (
-            <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">{category}</h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {items.map((item) => {
-                  const stock = getStock(item.id);
-                  const cartItem = cart.find(c => c.id === item.id);
-                  const quantity = cartItem?.quantity || 0;
-
-                  return (
-                    <div key={item.id} className="relative">
-                      <button
-                        onClick={() => addToCart(item)}
-                        disabled={stock <= 0}
-                        className={`w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left transition transform active:scale-95 ${
-                          stock <= 0
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer'
-                        }`}
-                      >
-                        <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
-                        <div className="text-primary font-bold mt-1">₺{item.price.toFixed(2)}</div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">Stok: {stock}</div>
-                        {quantity > 0 && (
-                          <div className="mt-1 bg-primary text-white text-xs px-2 py-1 rounded-full inline-block">
-                            {quantity}
-                          </div>
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleComplimentary(item)}
-                        className="absolute top-2 right-2 p-1.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg hover:from-pink-600 hover:to-purple-600 transition shadow-lg"
-                        title="İkram Et"
-                      >
-                        <Gift size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+      {/* Oturum süresi */}
+      {table.status === 'occupied' && (
+        <div className="mb-4">
+          <TableSessionTimer occupiedAt={table.occupiedAt} lastOrderTime={table.lastOrderTime} />
         </div>
+      )}
 
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 lg:sticky lg:top-6">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Siparis</h3>
+      {/* Mevcut Siparişler */}
+      {tableOrders.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Mevcut Siparişler</h2>
+          <div className="space-y-2">
+            {tableOrders.map(order => (
+              <div key={order.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {new Date(order.createdAt).toLocaleString('tr-TR')}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {order.items.map((item, idx) => (
+                        <span key={idx} className="bg-white dark:bg-gray-800 px-2 py-1 rounded text-sm">
+                          {item.quantity}x {item.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteOrder(order.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-            {cart.length === 0 ? (
-              <p className="text-gray-500 dark:text-gray-400 text-center py-8">Sepet bos</p>
-            ) : (
-              <>
-                <div className="space-y-3 mb-4 max-h-60 overflow-y-auto">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900 dark:text-white text-sm">{item.name}</p>
-                        <p className="text-primary text-sm font-bold">₺{(item.price * item.quantity).toFixed(2)}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => removeFromCart(item.id)}
-                          className="p-1 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/30 transition"
-                          title="Azalt"
-                        >
-                          <Minus size={16} />
-                        </button>
-                        <span className="font-medium text-gray-900 dark:text-white w-8 text-center">{item.quantity}</span>
+      {/* Ana İçerik */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Menü */}
+        <div className="lg:col-span-2">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Menü</h2>
+          <div className="space-y-4">
+            {Object.entries(groupedMenu).map(([category, items]) => (
+              <div key={category} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
+                <h3 className="font-semibold text-gray-900 dark:text-white mb-3">{category}</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {items.map(item => {
+                    const cartItem = cart.find(c => c.id === item.id);
+                    return (
+                      <div key={item.id} className="relative">
                         <button
                           onClick={() => addToCart(item)}
-                          className="p-1 bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/30 transition"
-                          title="Ekle"
+                          className="w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left hover:bg-blue-50 dark:hover:bg-gray-600 transition"
                         >
-                          <Plus size={16} />
+                          <p className="font-medium text-gray-900 dark:text-white">{item.name}</p>
+                          <p className="text-primary font-bold">₺{item.price.toFixed(2)}</p>
+                          {cartItem && (
+                            <span className="mt-2 bg-primary text-white text-xs px-2 py-1 rounded-full">
+                              {cartItem.quantity}
+                            </span>
+                          )}
                         </button>
                         <button
-                          onClick={() => removeFromCart(item.id, true)}
-                          className="p-1 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/30 transition ml-1"
-                          title="Tamamen Sil"
+                          onClick={() => handleComplimentary(item)}
+                          className="absolute top-2 right-2 p-1.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg"
+                          title="İkram Et"
                         >
-                          <Trash2 size={16} />
+                          <Gift size={12} />
                         </button>
                       </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sepet ve İşlemler */}
+        <div className="space-y-4">
+          {/* Sepet */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Sepet</h2>
+            {cart.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-center py-4">Sepet bos</p>
+            ) : (
+              <>
+                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                  {cart.map(item => (
+                    <div key={item.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => removeFromCart(item.id)} className="p-1 bg-red-100 rounded">
+                            <Minus size={14} />
+                          </button>
+                          <span className="w-6 text-center">{item.quantity}</span>
+                          <button onClick={() => addToCart(item)} className="p-1 bg-green-100 rounded">
+                            <Plus size={14} />
+                          </button>
+                          <button onClick={() => deleteFromCart(item.id)} className="p-1 bg-red-100 rounded ml-1">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-sm text-primary font-semibold">
+                        {item.isComplimentary ? 'İkram' : `₺${(item.price * item.quantity).toFixed(2)}`}
+                      </p>
                     </div>
                   ))}
                 </div>
-
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Toplam</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">₺{totalAmount.toFixed(2)}</span>
+                <div className="border-t pt-3 mb-3">
+                  <div className="flex justify-between">
+                    <span className="font-bold text-gray-900 dark:text-white">Toplam</span>
+                    <span className="font-bold text-primary">₺{total.toFixed(2)}</span>
                   </div>
                 </div>
-
                 <button
                   onClick={submitOrder}
-                  className={`w-full py-3 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                    orderSuccess
-                      ? 'bg-green-500 text-white'
-                      : 'bg-primary text-white hover:bg-blue-600'
-                  }`}
-                  disabled={orderSuccess}
+                  disabled={cart.length === 0}
+                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   <ShoppingCart size={20} />
-                  {orderSuccess ? '✓ Siparis Verildi' : `Siparis Ver (${cartItemCount})`}
+                  Sipariş Ver
                 </button>
               </>
             )}
           </div>
+
+          {/* Hesap İşlemleri */}
+          {table.totalAmount > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Hesap</h2>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <span className="text-gray-900 dark:text-white">Toplam Tutar</span>
+                  <span className="text-xl font-bold text-green-600 dark:text-green-400">
+                    ₺{table.totalAmount.toFixed(2)}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => handlePayment('cash')}
+                  className="w-full py-3 bg-success text-white rounded-lg font-medium hover:bg-green-600 flex items-center justify-center gap-2"
+                >
+                  <Wallet size={20} />
+                  Nakit Ödeme Al
+                </button>
+
+                <button
+                  onClick={() => handlePayment('card')}
+                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-blue-600 flex items-center justify-center gap-2"
+                >
+                  <CreditCard size={20} />
+                  Kart Ödeme Al
+                </button>
+
+                <button
+                  onClick={() => {
+                    if (window.confirm('Hesabı bölünecek. Onaylıyor musunuz?')) {
+                      // Hesap bölme mantığı buraya
+                      alert('Hesap bölme özelliği yakında eklenecek');
+                    }
+                  }}
+                  className="w-full py-3 bg-purple-500 text-white rounded-lg font-medium hover:bg-purple-600 flex items-center justify-center gap-2"
+                >
+                  <Divide size={20} />
+                  Hesabı Böl
+                </button>
+
+                <button
+                  onClick={() => {
+                    const targetTableId = prompt('Taşınacak masa ID\'sini girin:');
+                    if (targetTableId) {
+                      transferTable(table.id, parseInt(targetTableId));
+                      navigate(-1);
+                    }
+                  }}
+                  className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-red-600 flex items-center justify-center gap-2"
+                >
+                  <Move size={20} />
+                  Masayı Taşı
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Sipariş Onay Modal */}
-      <OrderConfirmationModal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        onConfirm={confirmOrder}
-        cart={cart}
-        tableName={table.name}
-        totalAmount={totalAmount}
-      />
-
       {/* İkram Modal */}
-      <ComplimentaryModal
-        isOpen={showComplimentaryModal}
-        onClose={() => {
-          setShowComplimentaryModal(false);
-          setSelectedComplimentaryItem(null);
-        }}
-        onConfirm={confirmComplimentary}
-        item={selectedComplimentaryItem}
-        tableName={table.name}
-      />
-
-      {/* Masa Transfer Modal */}
-      <TableTransferModal
-        isOpen={showTransferModal}
-        onClose={() => setShowTransferModal(false)}
-        onConfirm={handleTransferTable}
-        tables={tables}
-        currentTable={table}
-        mode="table"
-      />
+      {showComplimentary && selectedItem && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">İkram Et</h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-2">{selectedItem.name}</p>
+            <textarea
+              placeholder="İkram sebebini girin..."
+              className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg mb-4"
+              rows={3}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const reason = prompt('İkram sebebini girin:');
+                  if (reason) confirmComplimentary(reason);
+                }}
+                className="flex-1 py-3 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg font-medium"
+              >
+                İkram Et
+              </button>
+              <button
+                onClick={() => {
+                  setShowComplimentary(false);
+                  setSelectedItem(null);
+                }}
+                className="flex-1 py-3 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg font-medium"
+              >
+                İptal
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
