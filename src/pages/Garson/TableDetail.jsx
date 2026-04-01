@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock, Gift } from 'lucide-react';
 import OrderConfirmationModal from '../../components/orders/OrderConfirmationModal';
+import ComplimentaryModal from '../../components/payment/ComplimentaryModal';
 
 const TableDetail = () => {
   const { id } = useParams();
@@ -11,6 +12,34 @@ const TableDetail = () => {
   const [cart, setCart] = useState([]);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
+  const [selectedComplimentaryItem, setSelectedComplimentaryItem] = useState(null);
+
+  const handleComplimentary = (item) => {
+    setSelectedComplimentaryItem(item);
+    setShowComplimentaryModal(true);
+  };
+
+  const confirmComplimentary = (reason) => {
+    // İkra edilen ürünü sepete ekle (0 fiyat ile)
+    const complimentaryItem = {
+      ...selectedComplimentaryItem,
+      price: 0,
+      isComplimentary: true,
+      complimentaryReason: reason
+    };
+    setCart(prevCart => {
+      const existing = prevCart.find(c => c.id === complimentaryItem.id);
+      if (existing) {
+        return prevCart.map(c =>
+          c.id === complimentaryItem.id ? { ...c, quantity: c.quantity + 1, price: 0, isComplimentary: true, complimentaryReason: reason } : c
+        );
+      }
+      return [...prevCart, { ...complimentaryItem, quantity: 1 }];
+    });
+    setShowComplimentaryModal(false);
+    setSelectedComplimentaryItem(null);
+  };
 
   const table = tables.find(t => t.id === parseInt(id));
 
@@ -148,25 +177,33 @@ const TableDetail = () => {
                   const quantity = cartItem?.quantity || 0;
 
                   return (
-                    <button
-                      key={item.id}
-                      onClick={() => addToCart(item)}
-                      disabled={stock <= 0}
-                      className={`bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left transition transform active:scale-95 ${
-                        stock <= 0
-                          ? 'opacity-50 cursor-not-allowed'
-                          : 'hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer'
-                      }`}
-                    >
-                      <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
-                      <div className="text-primary font-bold mt-1">₺{item.price.toFixed(2)}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Stok: {stock}</div>
-                      {quantity > 0 && (
-                        <div className="mt-1 bg-primary text-white text-xs px-2 py-1 rounded-full inline-block">
-                          {quantity}
-                        </div>
-                      )}
-                    </button>
+                    <div key={item.id} className="relative">
+                      <button
+                        onClick={() => addToCart(item)}
+                        disabled={stock <= 0}
+                        className={`w-full bg-gray-50 dark:bg-gray-700 rounded-lg p-4 text-left transition transform active:scale-95 ${
+                          stock <= 0
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:bg-blue-50 dark:hover:bg-gray-600 cursor-pointer'
+                        }`}
+                      >
+                        <div className="font-medium text-gray-900 dark:text-white">{item.name}</div>
+                        <div className="text-primary font-bold mt-1">₺{item.price.toFixed(2)}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">Stok: {stock}</div>
+                        {quantity > 0 && (
+                          <div className="mt-1 bg-primary text-white text-xs px-2 py-1 rounded-full inline-block">
+                            {quantity}
+                          </div>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => handleComplimentary(item)}
+                        className="absolute top-2 right-2 p-1.5 bg-gradient-to-r from-pink-500 to-purple-500 text-white rounded-lg hover:from-pink-600 hover:to-purple-600 transition shadow-lg"
+                        title="İkram Et"
+                      >
+                        <Gift size={14} />
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -250,6 +287,18 @@ const TableDetail = () => {
         cart={cart}
         tableName={table.name}
         totalAmount={totalAmount}
+      />
+
+      {/* İkram Modal */}
+      <ComplimentaryModal
+        isOpen={showComplimentaryModal}
+        onClose={() => {
+          setShowComplimentaryModal(false);
+          setSelectedComplimentaryItem(null);
+        }}
+        onConfirm={confirmComplimentary}
+        item={selectedComplimentaryItem}
+        tableName={table.name}
       />
     </div>
   );

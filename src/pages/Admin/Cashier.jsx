@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { Check, X, DollarSign } from 'lucide-react';
+import { Check, X, DollarSign, Wallet, CreditCard, Divide, Gift } from 'lucide-react';
+import PaymentModal from '../../components/payment/PaymentModal';
+import SplitBillModal from '../../components/payment/SplitBillModal';
+import ComplimentaryModal from '../../components/payment/ComplimentaryModal';
 
 const Cashier = () => {
   const navigate = useNavigate();
-  const { tables, menu, addOrder, closeTable } = useApp();
+  const { tables, menu, addOrder, closeTable, orders, processPayment, processSplitPayment } = useApp();
   const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
+  const [selectedComplimentaryItem, setSelectedComplimentaryItem] = useState(null);
 
   const addToCart = (item) => {
     setCart(prevCart => {
@@ -39,10 +46,40 @@ const Cashier = () => {
     setCart([]);
   };
 
-  const handlePayment = (table) => {
-    if (window.confirm(`${table.name} hesap kapatılacak. Emin misiniz?`)) {
-      closeTable(table.id);
+  const handlePayment = (table, method = 'single') => {
+    if (method === 'single') {
+      setShowPaymentModal(true);
+    } else if (method === 'split') {
+      setShowSplitModal(true);
     }
+  };
+
+  const confirmPayment = async (paymentMethod) => {
+    processPayment(selectedTable.id, { method: paymentMethod });
+    setShowPaymentModal(false);
+    setSelectedTable(null);
+  };
+
+  const confirmSplit = async (splitData) => {
+    processSplitPayment(selectedTable.id, splitData);
+    setShowSplitModal(false);
+    setSelectedTable(null);
+  };
+
+  const handleComplimentary = (item) => {
+    setSelectedComplimentaryItem(item);
+    setShowComplimentaryModal(true);
+  };
+
+  const confirmComplimentary = async (reason) => {
+    // İkram işlemini logla
+    console.log(`Complimentary: ${selectedComplimentaryItem.name} - ${reason}`);
+    setShowComplimentaryModal(false);
+    setSelectedComplimentaryItem(null);
+  };
+
+  const getTableOrders = (tableId) => {
+    return orders.filter(o => o.tableId === tableId && o.status !== 'paid');
   };
 
   const groupedMenu = menu
@@ -153,13 +190,31 @@ const Cashier = () => {
                     </span>
                   </div>
                   {selectedTable.status !== 'empty' && (
-                    <button
-                      onClick={() => handlePayment(selectedTable)}
-                      className="w-full bg-success text-white py-3 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2"
-                    >
-                      <DollarSign size={20} />
-                      Hesabı Al ve Kapat
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => handlePayment(selectedTable, 'single')}
+                        className="w-full bg-success text-white py-3 rounded-lg font-medium hover:bg-green-600 transition flex items-center justify-center gap-2"
+                      >
+                        <DollarSign size={20} />
+                        Hesabı Al ve Kapat
+                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handlePayment(selectedTable, 'split')}
+                          className="bg-primary text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition flex items-center justify-center gap-1 text-sm"
+                        >
+                          <Divide size={16} />
+                          Böl
+                        </button>
+                        <button
+                          onClick={() => setShowComplimentaryModal(true)}
+                          className="bg-gradient-to-r from-pink-500 to-purple-500 text-white py-2 rounded-lg font-medium hover:from-pink-600 hover:to-purple-600 transition flex items-center justify-center gap-1 text-sm"
+                        >
+                          <Gift size={16} />
+                          İkram
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -171,6 +226,36 @@ const Cashier = () => {
           )}
         </div>
       </div>
+
+      {/* Payment Modals */}
+      <PaymentModal
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onConfirm={confirmPayment}
+        totalAmount={selectedTable?.totalAmount || 0}
+        tableName={selectedTable?.name || ''}
+      />
+
+      {selectedTable && (
+        <SplitBillModal
+          isOpen={showSplitModal}
+          onClose={() => setShowSplitModal(false)}
+          onConfirm={confirmSplit}
+          tableOrders={getTableOrders(selectedTable.id)}
+          tableName={selectedTable.name}
+        />
+      )}
+
+      <ComplimentaryModal
+        isOpen={showComplimentaryModal}
+        onClose={() => {
+          setShowComplimentaryModal(false);
+          setSelectedComplimentaryItem(null);
+        }}
+        onConfirm={confirmComplimentary}
+        item={selectedComplimentaryItem}
+        tableName={selectedTable?.name || ''}
+      />
     </div>
   );
 };

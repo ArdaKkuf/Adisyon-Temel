@@ -258,6 +258,48 @@ export const AppProvider = ({ children }) => {
     return { income, expense, balance: income - expense };
   };
 
+  // Ödeme işlemleri
+  const processPayment = (tableId, paymentData) => {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
+
+    // Ödeme kaydı oluştur
+    const transaction = {
+      type: 'income',
+      category: 'sales',
+      description: `${table.name} ödeme (${paymentData.method === 'cash' ? 'Nakit' : 'Kart'})`,
+      amount: table.totalAmount,
+      date: new Date().toISOString().split('T')[0],
+      relatedOrderId: tableId,
+      paymentMethod: paymentData.method,
+    };
+
+    addTransaction(transaction);
+    closeTable(tableId);
+  };
+
+  const processSplitPayment = (tableId, splits) => {
+    const table = tables.find(t => t.id === tableId);
+    if (!table) return;
+
+    splits.forEach(split => {
+      if (split.total > 0) {
+        const transaction = {
+          type: 'income',
+          category: 'sales',
+          description: `${table.name} - ${split.name} (${split.method === 'cash' ? 'Nakit' : 'Kart'})`,
+          amount: split.total,
+          date: new Date().toISOString().split('T')[0],
+          relatedOrderId: tableId,
+          paymentMethod: split.method,
+        };
+        addTransaction(transaction);
+      }
+    });
+
+    closeTable(tableId);
+  };
+
   // Login
   const login = (username, password) => {
     const foundUser = users.find(u => u.username === username && u.password === password);
@@ -297,6 +339,8 @@ export const AppProvider = ({ children }) => {
     addTransaction,
     deleteTransaction,
     getIncomeExpense,
+    processPayment,
+    processSplitPayment,
     login,
     logout,
   };
