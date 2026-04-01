@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import TableSessionTimer from '../../components/tables/TableSessionTimer';
 
 const TableList = () => {
   const navigate = useNavigate();
@@ -33,14 +34,19 @@ const TableList = () => {
           <button
             key={table.id}
             onClick={() => navigate(`/garson/table/${table.id}`)}
-            className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6 border-2 transition hover:shadow-md hover:scale-105 ${getStatusColor(table.status)}`}
+            className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4 border-2 transition hover:shadow-md hover:scale-105 ${getStatusColor(table.status)}`}
           >
             <div className="text-center">
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">{table.name}</h3>
               <div className="text-sm font-medium mb-2">{getStatusText(table.status)}</div>
               {table.totalAmount > 0 && (
-                <div className="text-lg font-bold text-gray-900 dark:text-white">
+                <div className="text-lg font-bold text-gray-900 dark:text-white mb-3">
                   ₺{table.totalAmount.toFixed(2)}
+                </div>
+              )}
+              {table.status === 'occupied' && (
+                <div className="mt-2">
+                  <TableSessionTimer occupiedAt={table.occupiedAt} lastOrderTime={table.lastOrderTime} />
                 </div>
               )}
             </div>

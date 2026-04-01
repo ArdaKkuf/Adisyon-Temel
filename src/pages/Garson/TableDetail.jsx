@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock, Gift } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, ShoppingCart, Trash2, Clock, Gift, Move } from 'lucide-react';
 import OrderConfirmationModal from '../../components/orders/OrderConfirmationModal';
 import ComplimentaryModal from '../../components/payment/ComplimentaryModal';
+import TableTransferModal from '../../components/tables/TableTransferModal';
+import TableSessionTimer from '../../components/tables/TableSessionTimer';
 
 const TableDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { tables, menu, addOrder, closeTable, getStock } = useApp();
+  const { tables, menu, addOrder, closeTable, getStock, transferTable } = useApp();
   const [cart, setCart] = useState([]);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showComplimentaryModal, setShowComplimentaryModal] = useState(false);
   const [selectedComplimentaryItem, setSelectedComplimentaryItem] = useState(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
 
   const handleComplimentary = (item) => {
     setSelectedComplimentaryItem(item);
@@ -39,6 +42,12 @@ const TableDetail = () => {
     });
     setShowComplimentaryModal(false);
     setSelectedComplimentaryItem(null);
+  };
+
+  const handleTransferTable = (targetTableId) => {
+    transferTable(table.id, targetTableId);
+    setShowTransferModal(false);
+    navigate('/garson');
   };
 
   const table = tables.find(t => t.id === parseInt(id));
@@ -142,27 +151,39 @@ const TableDetail = () => {
       </button>
 
       <div className="mb-6">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{table.name}</h2>
-        <div className="flex items-center gap-4 mt-2 flex-wrap">
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            table.status === 'empty' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
-            table.status === 'occupied' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
-            'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-          }`}>
-            {table.status === 'empty' ? 'Bos' : table.status === 'occupied' ? 'Dolu' : 'Odendi'}
-          </span>
-          {table.totalAmount > 0 && (
-            <span className="text-lg font-bold text-gray-900 dark:text-white">
-              Mevcut Tutar: ₺{table.totalAmount.toFixed(2)}
-            </span>
-          )}
-          {table.status === 'occupied' && getSessionDuration(table) && (
-            <span className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
-              <Clock size={14} />
-              {getSessionDuration(table)}
-            </span>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white">{table.name}</h2>
+            <div className="flex items-center gap-4 mt-2 flex-wrap">
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                table.status === 'empty' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400' :
+                table.status === 'occupied' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400' :
+                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+              }`}>
+                {table.status === 'empty' ? 'Bos' : table.status === 'occupied' ? 'Dolu' : 'Odendi'}
+              </span>
+              {table.totalAmount > 0 && (
+                <span className="text-lg font-bold text-gray-900 dark:text-white">
+                  Mevcut Tutar: ₺{table.totalAmount.toFixed(2)}
+                </span>
+              )}
+            </div>
+          </div>
+          {table.status === 'occupied' && (
+            <button
+              onClick={() => setShowTransferModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-red-600 transition flex items-center gap-2"
+            >
+              <Move size={18} />
+              Masayı Taşı
+            </button>
           )}
         </div>
+        {table.status === 'occupied' && (
+          <div className="mt-3">
+            <TableSessionTimer occupiedAt={table.occupiedAt} lastOrderTime={table.lastOrderTime} />
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -299,6 +320,16 @@ const TableDetail = () => {
         onConfirm={confirmComplimentary}
         item={selectedComplimentaryItem}
         tableName={table.name}
+      />
+
+      {/* Masa Transfer Modal */}
+      <TableTransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        onConfirm={handleTransferTable}
+        tables={tables}
+        currentTable={table}
+        mode="table"
       />
     </div>
   );

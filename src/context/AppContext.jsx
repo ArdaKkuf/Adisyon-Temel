@@ -300,6 +300,86 @@ export const AppProvider = ({ children }) => {
     closeTable(tableId);
   };
 
+  // Masa işlemleri
+  const transferTable = (fromTableId, toTableId) => {
+    const fromTable = tables.find(t => t.id === fromTableId);
+    const toTable = tables.find(t => t.id === toTableId);
+
+    if (!fromTable || !toTable) return;
+
+    // Siparişleri hedef masaya taşı
+    const updatedOrders = orders.map(order => {
+      if (order.tableId === fromTableId) {
+        return { ...order, tableId: toTableId };
+      }
+      return order;
+    });
+    setOrders(updatedOrders);
+
+    // Hedef masayı güncelle
+    const toTableOrders = updatedOrders.filter(o => o.tableId === toTableId && o.status !== 'paid');
+    const toTableTotal = fromTable.totalAmount + toTable.totalAmount;
+
+    updateTable(toTableId, {
+      status: 'occupied',
+      orders: toTableOrders,
+      totalAmount: toTableTotal,
+      lastOrderTime: new Date().toISOString(),
+    });
+
+    // Kaynak masayı temizle
+    updateTable(fromTableId, {
+      status: 'empty',
+      orders: [],
+      totalAmount: 0,
+      occupiedAt: null,
+      sessionDuration: 0,
+      lastOrderTime: null,
+    });
+  };
+
+  const transferOrder = (orderId, toTableId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const fromTableId = order.tableId;
+    const fromTable = tables.find(t => t.id === fromTableId);
+    const toTable = tables.find(t => t.id === toTableId);
+
+    if (!fromTable || !toTable) return;
+
+    // Siparişi güncelle
+    const updatedOrders = orders.map(o =>
+      o.id === orderId ? { ...o, tableId: toTableId } : o
+    );
+    setOrders(updatedOrders);
+
+    // Kaynak masanın toplamını güncelle
+    const fromTableOrders = updatedOrders.filter(o => o.tableId === fromTableId && o.status !== 'paid');
+    const fromTableTotal = fromTableOrders.reduce((sum, o) => {
+      return sum + o.items.reduce((s, i) => s + (i.price * i.quantity), 0);
+    }, 0);
+
+    updateTable(fromTableId, {
+      orders: fromTableOrders,
+      totalAmount: fromTableTotal,
+      lastOrderTime: new Date().toISOString(),
+    });
+
+    // Hedef masayı güncelle
+    const toTableOrders = updatedOrders.filter(o => o.tableId === toTableId && o.status !== 'paid');
+    const toTableTotal = toTableOrders.reduce((sum, o) => {
+      return sum + o.items.reduce((s, i) => s + (i.price * i.quantity), 0);
+    }, 0);
+
+    updateTable(toTableId, {
+      status: 'occupied',
+      orders: toTableOrders,
+      totalAmount: toTableTotal,
+      lastOrderTime: new Date().toISOString(),
+    });
+  };
+
   // Login
   const login = (username, password) => {
     const foundUser = users.find(u => u.username === username && u.password === password);
@@ -341,6 +421,8 @@ export const AppProvider = ({ children }) => {
     getIncomeExpense,
     processPayment,
     processSplitPayment,
+    transferTable,
+    transferOrder,
     login,
     logout,
   };
